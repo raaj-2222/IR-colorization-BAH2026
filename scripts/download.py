@@ -14,19 +14,19 @@ def download_landsat_data(product_id, bands, start_date, end_date, output_path, 
 
     collection = ee.ImageCollection('LANDSAT/LC09/C02/T1_L2') \
         .filterDate(start_date, end_date) \
-        .filterMetadata('WRS_PATH', 'equals', 20) \
-        .filterMetadata('WRS_ROW', 'equals', 30) \
+        .filterBounds(ee.Geometry.Point(73.8278, 15.2993)) \
         .select(bands)
 
     image = collection.first()
 
     if image:
         logger.info(f'Attempting to download image for product ID: {product_id} with bands {bands} to {output_path}')
-        os.makedirs(output_path, exist_ok=True)
-        filename_prefix = f'landsat9_{product_id}'
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        small_region = image.geometry().centroid().buffer(30000).bounds()
 
         try:
-            geemap.ee_export_image(image, output_path, scale=30, region=image.geometry().bounds(), file_per_band=True, filename_prefix=filename_prefix)
+            geemap.ee_export_image(image, output_path, scale=30, region=small_region, file_per_band=True)
+            # geemap.ee_export_image(image, output_path, scale=30, region=image.geometry().bounds(), file_per_band=True, filename_prefix=filename_prefix)
             logger.info(f'Individual band images successfully downloaded to {output_path}')
         except Exception as e:
             logger.error(f"Error during direct download using geemap: {e}")
