@@ -1,2 +1,9 @@
-
+input/
+output/
 models/*/checkpoints/
+*.TIF
+*.tif
+*.npy
+
+output.log
+*.log
