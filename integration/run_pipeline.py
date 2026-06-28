@@ -221,6 +221,14 @@ def run_pipeline(args):
     save_single_band_geotiff(sr_output_denorm[0], profile, sr_output_path)
     print(f"Saved super-resolved TIR to: {sr_output_path}")
 
+    # Free the SR model's GPU memory before loading the colorization model,
+    # since both models being resident simultaneously on a large image can
+    # exhaust available memory on more constrained GPUs/runtimes.
+    del sr_model
+    if device.type == "cuda":
+        torch.cuda.empty_cache()
+    print("Freed super-resolution model from memory.")
+
     # --- Stage B: Colorization (tiled) ---
     print("Loading colorization model...")
     color_model = UNetGenerator().to(device)
@@ -244,12 +252,22 @@ def run_pipeline(args):
     print(f"Colorization inference time: {color_elapsed:.3f}s")
 
     color_output_0_1 = from_minus_one_one(color_output)  # back to [0, 1] for saving
+    print(f"Colorized array shape: {color_output_0_1.shape}, dtype: {color_output_0_1.dtype}")
+    print(
+        f"Estimated memory for this array: "
+        f"{color_output_0_1.nbytes / (1024**3):.2f} GB"
+    )
 
     color_output_path = os.path.join(
         args.output_root, "colorized_tir_100m", f"{args.product_id}.tif"
     )
-    save_bgr_geotiff(color_output_0_1, profile, color_output_path)
-    print(f"Saved colorized RGB (BGR channel order) to: {color_output_path}")
+    print(f"Attempting to save to: {color_output_path}")
+    try:
+        save_bgr_geotiff(color_output_0_1, profile, color_output_path)
+        print(f"Successfully saved colorized RGB (BGR channel order) to: {color_output_path}")
+    except Exception as e:
+        print(f"ERROR while saving colorized output: {type(e).__name__}: {e}")
+        raise
 
     total_elapsed = sr_elapsed + color_elapsed
     print(f"\nTotal inference time: {total_elapsed:.3f}s")
